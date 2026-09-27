@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ftrace · 傅里叶本轮线稿工坊</title>
+<style>
+  :root {
+    --bg: #0d1017;
+    --bg-soft: #141926;
+    --panel: #181e2e;
+    --panel-2: #1e2639;
+    --border: #2a3350;
+    --text: #e7ecf7;
+    --muted: #8b96b3;
+    --accent: #4cc2ff;
+    --accent-2: #a06bff;
+    --ok: #38d39f;
+    --err: #ff6b7a;
+    --radius: 16px;
+    --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+      "PingFang SC", "Microsoft YaHei", sans-serif;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(76, 194, 255, 0.14), transparent 60%),
+      radial-gradient(1000px 500px at 100% 0%, rgba(160, 107, 255, 0.16), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(13, 16, 23, 0.6);
+    backdrop-filter: blur(8px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 19px; }
+  .brand .logo {
+    width: 34px; height: 34px; border-radius: 10px;
+    display: grid; place-items: center; font-size: 20px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #08111f;
+  }
+  .brand small { color: var(--muted); font-weight: 500; font-size: 13px; }
+  .chip {
+    font-size: 12px; color: var(--muted); border: 1px solid var(--border);
+    padding: 4px 10px; border-radius: 999px; font-variant-numeric: tabular-nums;
+  }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 28px; }
+
+  .hero { margin-bottom: 26px; }
+  .hero h1 {
+    margin: 0 0 8px; font-size: 30px; letter-spacing: 0.5px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    box-shadow: var(--shadow);
+  }
+  .panel h2 {
+    margin: 0 0 16px; font-size: 15px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: var(--muted);
+  }
+
+  /* ---------- dropzone ---------- */
+  .dropzone {
+    position: relative;
+    border: 2px dashed var(--border);
+    border-radius: 14px;
+    padding: 34px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.18s, background 0.18s;
+    background: var(--bg-soft);
+  }
+  .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: #16203380; }
+  .dropzone .dz-icon { font-size: 40px; margin-bottom: 10px; }
+  .dropzone p { margin: 4px 0; color: var(--muted); font-size: 14px; }
+  .dropzone strong { color: var(--text); }
+  .dropzone .link { color: var(--accent); text-decoration: underline; }
+  .dropzone .thumb {
+    max-width: 100%; max-height: 220px; border-radius: 10px; margin: 10px auto 0;
+    display: block;
+  }
+  .dropzone input[type="file"] { display: none; }
+
+  /* ---------- params ---------- */
+  .params { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 20px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field.full { grid-column: 1 / -1; }
+  .field label { font-size: 12.5px; color: var(--muted); }
+  .field label b { color: var(--text); font-weight: 600; }
+  input[type="number"], select {
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 9px;
+    padding: 9px 11px; font-size: 14px; width: 100%;
+    outline: none; transition: border-color 0.15s;
+  }
+  input[type="number"]:focus, select:focus { border-color: var(--accent); }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .range-row { display: flex; align-items: center; gap: 10px; }
+  .range-row output { min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; color: var(--accent); }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+  .check input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+  details.adv { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+  details.adv summary { cursor: pointer; color: var(--muted); font-size: 13px; user-select: none; }
+  details.adv .params { margin-top: 12px; }
+
+  /* ---------- button ---------- */
+  .convert {
+    margin-top: 22px; width: 100%; border: none; cursor: pointer;
+    padding: 14px; border-radius: 12px; font-size: 16px; font-weight: 700; color: #08111f;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    transition: transform 0.12s, opacity 0.12s;
+  }
+  .convert:hover:not(:disabled) { transform: translateY(-2px); }
+  .convert:disabled { opacity: 0.55; cursor: not-allowed; }
+  .spinner {
+    display: inline-block; width: 16px; height: 16px; vertical-align: -2px; margin-right: 8px;
+    border: 2px solid rgba(8, 17, 31, 0.35); border-top-color: #08111f;
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error {
+    margin-top: 14px; padding: 12px 14px; border-radius: 10px; display: none;
+    background: rgba(255, 107, 122, 0.12); border: 1px solid rgba(255, 107, 122, 0.4);
+    color: var(--err); font-size: 13.5px;
+  }
+  .error.show { display: block; }
+
+  /* ---------- results ---------- */
+  .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 980px) { .result-grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+  }
+  .card .head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    font-size: 13px; color: var(--muted);
+  }
+  .card .head b { color: var(--text); font-weight: 600; }
+  .card img, .card iframe { display: block; width: 100%; background: #fff; }
+  .card .body { padding: 14px; }
+  .card a.dl {
+    font-size: 12.5px; color: var(--accent); text-decoration: none;
+    border: 1px solid var(--border); padding: 5px 10px; border-radius: 8px;
+  }
+  .card a.dl:hover { border-color: var(--accent); }
+  .stat-strip {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;
+  }
+  .stat {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; font-size: 13px;
+  }
+  .stat b { color: var(--accent); font-size: 15px; font-variant-numeric: tabular-nums; }
+  .stat span { display: block; color: var(--muted); font-size: 11.5px; }
+
+  .contour {
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px; margin-bottom: 14px;
+  }
+  .contour-head { font-size: 13.5px; font-weight: 600; margin-bottom: 10px; }
+  .contour-head span { color: var(--muted); font-weight: 500; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 7px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  td { font-variant-numeric: tabular-nums; }
+  td.mag { color: var(--accent); font-weight: 600; }
+
+  .empty {
+    color: var(--muted); text-align: center; padding: 60px 20px; font-size: 15px;
+  }
+  .empty .big { font-size: 44px; margin-bottom: 12px; }
+
+  footer { text-align: center; color: var(--muted); font-size: 12.5px; padding: 30px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">◐</div>
+    <div>ftrace studio <small>图片 → 线稿 → 傅里叶本轮</small></div>
+  </div>
+  <div class="chip" id="server-chip">127.0.0.1:17801</div>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>把轮廓分解成旋转的圆盘</h1>
+    <p>上传一张图片，提取黑白线稿，用傅里叶变换得到每个轮廓的本轮（epicycle）系数，并实时生成绘制动画。</p>
+  </section>
+
+  <section class="layout">
+    <!-- 左侧：上传 + 参数 -->
+    <div class="panel">
+      <h2>① 上传图片</h2>
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="file" accept="image/*" />
+        <div id="dz-inner">
+          <div class="dz-icon">🖼️</div>
+          <p><strong>拖拽图片到这里</strong> 或 <span class="link">点击选择文件</span></p>
+          <p>支持 PNG / JPG / WebP / BMP / PPM / GIF / TIFF 等</p>
+        </div>
+        <img id="thumb" class="thumb" alt="预览" hidden />
+      </div>
+
+      <h2 style="margin-top:24px">② 参数</h2>
+      <div class="params">
+        <div class="field">
+          <label>线稿模式</label>
+          <select id="mode">
+            <option value="auto" selected>auto（自动）</option>
+            <option value="edge">edge（Canny 边缘）</option>
+            <option value="line">line（已有线稿）</option>
+            <option value="mask">mask（掩膜轮廓）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>高斯模糊 σ</label>
+          <div class="range-row">
+            <input type="range" id="blur" min="0" max="5" step="0.1" value="1.2" />
+            <output id="blur-out">1.2</output>
+          </div>
+        </div>
+        <div class="field">
+          <label>采样点数 / 轮廓</label>
+          <input type="number" id="samples" value="1024" min="16" step="16" />
+        </div>
+        <div class="field">
+          <label>最大谐波数</label>
+          <input type="number" id="harmonics" value="256" min="1" step="1" />
+        </div>
+        <div class="field">
+          <label>最大轮廓数</label>
+          <input type="number" id="max_contours" value="12" min="1" step="1" />
+        </div>
+        <div class="field">
+          <label>动画帧数</label>
+          <input type="number" id="frames" value="96" min="2" step="1" />
+        </div>
+        <div class="field check full">
+          <input type="checkbox" id="invert" />
+          <label for="invert" style="cursor:pointer">反转前景 / 背景极性（浅色主体深色背景时勾选）</label>
+        </div>
+        <div class="field check full">
+          <input type="checkbox" id="color" checked />
+          <label for="color" style="cursor:pointer">彩色线条（按原图区域主色染色，法阵绘制用）</label>
+        </div>
+      </div>
+
+      <details class="adv">
+        <summary>高级选项（Canny 阈值 / 最小面积 / 渲染上限 / GIF）</summary>
+        <div class="params">
+          <div class="field">
+            <label>Canny 低阈值</label>
+            <input type="number" id="canny_low" value="0.08" min="0" max="1" step="0.01" />
+          </div>
+          <div class="field">
+            <label>Canny 高阈值</label>
+            <input type="number" id="canny_high" value="0.22" min="0" max="1" step="0.01" />
+          </div>
+          <div class="field">
+            <label>最小面积 (px)</label>
+            <input type="number" id="min_area" value="30" min="0" step="1" />
+          </div>
+          <div class="field">
+            <label>渲染最长边 (px)</label>
+            <input type="number" id="max_dim" value="1600" min="64" step="64" />
+          </div>
+          <div class="field check full">
+            <input type="checkbox" id="no_gif" />
+            <label for="no_gif" style="cursor:pointer">不生成 GIF 动画</label>
+          </div>
+        </div>
+      </details>
+
+      <button class="convert" id="convert">
+        <span class="spinner" id="spinner" style="display:none"></span>
+        <span id="convert-label">开始转换</span>
+      </button>
+      <div class="error" id="error"></div>
+    </div>
+
+    <!-- 右侧：结果 -->
+    <div class="panel" id="results">
+      <h2>③ 结果</h2>
+      <div class="empty" id="empty">
+        <div class="big">✦</div>
+        转换结果会显示在这里
+      </div>
+
+      <div id="results-body" style="display:none">
+        <div class="stat-strip" id="stats"></div>
+
+        <div class="result-grid">
+          <div class="card">
+            <div class="head"><b>线稿 PNG</b><a class="dl" id="dl-lineart" download>下载</a></div>
+            <img id="img-lineart" alt="line art" />
+          </div>
+          <div class="card">
+            <div class="head"><b>彩色线稿（线条自带颜色）</b><a class="dl" id="dl-lineart-color" download>下载</a></div>
+            <img id="img-lineart-color" alt="colored line art" />
+          </div>
+          <div class="card">
+            <div class="head"><b>预览 PNG（还原轨迹）</b><a class="dl" id="dl-preview" download>下载</a></div>
+            <img id="img-preview" alt="preview" />
+          </div>
+          <div class="card" id="gif-card">
+            <div class="head"><b>绘制动画 GIF</b><a class="dl" id="dl-gif" download>下载</a></div>
+            <img id="img-gif" alt="draw animation" />
+          </div>
+          <div class="card">
+            <div class="head"><b>本轮 SVG</b><a class="dl" id="dl-svg" download>下载</a></div>
+            <iframe id="frame-svg" style="border:0;height:360px" title="epicycles svg"></iframe>
+          </div>
+        </div>
+
+        <h2 style="margin:24px 0 12px">④ 傅里叶系数（每轮廓 Top 谐波）</h2>
+        <div id="coeffs"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>ftrace · 本地 Rust HTTP 服务 + 前端单页 · 傅里叶本轮（epicycle）线稿动画</footer>
+
+<script>
+(function () {
+  var dropzone = document.getElementById('dropzone');
+  var fileInput = document.getElementById('file');
+  var thumb = document.getElementById('thumb');
+  var dzInner = document.getElementById('dz-inner');
+  var currentFile = null;
+
+  function handleFile(f) {
+    if (!f) return;
+    if (!/^image\//.test(f.type) && !/\.(png|jpe?g|gif|webp|bmp|tiff?|ppm|pgm|pbm)$/i.test(f.name)) {
+      showError('不支持的文件类型：' + f.name);
+      return;
+    }
+    currentFile = f;
+    thumb.src = URL.createObjectURL(f);
+    thumb.hidden = false;
+    dzInner.hidden = true;
+    clearError();
+  }
+
+  dropzone.addEventListener('click', function (e) {
+    if (e.target !== fileInput) fileInput.click();
+  });
+  fileInput.addEventListener('change', function () { handleFile(fileInput.files[0]); });
+  dropzone.addEventListener('dragover', function (e) {
+    e.preventDefault(); dropzone.classList.add('drag');
+  });
+  dropzone.addEventListener('dragleave', function () { dropzone.classList.remove('drag'); });
+  dropzone.addEventListener('drop', function (e) {
+    e.preventDefault(); dropzone.classList.remove('drag');
+    handleFile(e.dataTransfer.files[0]);
+  });
+
+  // 滑块实时显示
+  var blur = document.getElementById('blur');
+  var blurOut = document.getElementById('blur-out');
+  blur.addEventListener('input', function () { blurOut.textContent = blur.value; });
+
+  var errorBox = document.getElementById('error');
+  function showError(msg) { errorBox.textContent = msg; errorBox.classList.add('show'); }
+  function clearError() { errorBox.textContent = ''; errorBox.classList.remove('show'); }
+
+  var convert = document.getElementById('convert');
+  var spinner = document.getElementById('spinner');
+  var label = document.getElementById('convert-label');
+
+  function setLoading(on) {
+    convert.disabled = on;
+    spinner.style.display = on ? 'inline-block' : 'none';
+    label.textContent = on ? '转换中…' : '开始转换';
+  }
+
+  convert.addEventListener('click', async function () {
+    if (!currentFile) { showError('请先选择一张图片'); return; }
+    clearError();
+    setLoading(true);
+
+    var fd = new FormData();
+    fd.append('image', currentFile);
+    fd.append('mode', document.getElementById('mode').value);
+    fd.append('blur', blur.value);
+    fd.append('canny_low', document.getElementById('canny_low').value);
+    fd.append('canny_high', document.getElementById('canny_high').value);
+    fd.append('samples', document.getElementById('samples').value);
+    fd.append('harmonics', document.getElementById('harmonics').value);
+    fd.append('max_contours', document.getElementById('max_contours').value);
+    fd.append('min_area', document.getElementById('min_area').value);
+    fd.append('frames', document.getElementById('frames').value);
+    fd.append('max_dim', document.getElementById('max_dim').value);
+    if (document.getElementById('invert').checked) fd.append('invert', 'true');
+    if (document.getElementById('no_gif').checked) fd.append('no_gif', 'true');
+    if (!document.getElementById('color').checked) fd.append('no_color', 'true');
+
+    try {
+      var r = await fetch('/api/transform', { method: 'POST', body: fd });
+      var j = await r.json();
+      if (j.ok) render(j);
+      else showError(j.error || '转换失败（未知错误）');
+    } catch (e) {
+      showError('请求失败：' + e.message);
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  function fmt(n) { return (Math.round(n * 10) / 10).toLocaleString(); }
+
+  function setImg(id, url, wrap) {
+    var el = document.getElementById(id);
+    if (url) { el.src = url; el.style.display = 'block'; if (wrap) wrap.style.display = ''; }
+  }
+  function setDl(id, url) {
+    var a = document.getElementById(id);
+    a.href = url || '#';
+    a.setAttribute('download', (url || '').split('/').pop() || 'file');
+  }
+
+  function render(j) {
+    document.getElementById('empty').style.display = 'none';
+    document.getElementById('results-body').style.display = 'block';
+
+    var stats = document.getElementById('stats');
+    stats.innerHTML =
+      stat(j.width + '×' + j.height, '尺寸') +
+      stat(j.mode, '模式') +
+      stat(j.samples, '采样点/轮廓') +
+      stat(j.harmonics, '谐波上限') +
+      stat((j.contours || []).length, '轮廓数');
+    function stat(b, s) { return '<div class="stat"><b>' + b + '</b><span>' + s + '</span></div>'; }
+
+    setImg('img-lineart', j.files.lineart);
+    setImg('img-lineart-color', j.files.lineart_color);
+    setImg('img-preview', j.files.preview);
+    var gifCard = document.getElementById('gif-card');
+    if (j.files.gif) {
+      setImg('img-gif', j.files.gif);
+      gifCard.style.display = '';
+    } else {
+      gifCard.style.display = 'none';
+    }
+    document.getElementById('frame-svg').src = j.files.svg || '';
+
+    setDl('dl-lineart', j.files.lineart);
+    setDl('dl-lineart-color', j.files.lineart_color);
+    setDl('dl-preview', j.files.preview);
+    setDl('dl-gif', j.files.gif);
+    setDl('dl-svg', j.files.svg);
+
+    var coeffs = document.getElementById('coeffs');
+    coeffs.innerHTML = '';
+    (j.contours || []).forEach(function (c) {
+      var rows = c.harmonics.map(function (h) {
+        var phase = ((h.phase * 180 / Math.PI) % 360).toFixed(1);
+        return '<tr><td>k=' + h.k + '</td><td class="mag">' + h.mag.toFixed(2) +
+          '</td><td>' + phase + '°</td></tr>';
+      }).join('');
+      var card = document.createElement('div');
+      card.className = 'contour';
+      card.innerHTML =
+        '<div class="contour-head">轮廓 #' + c.id +
+        ' <span>周长 ' + fmt(c.perimeter_px) + ' px · 面积 ' + fmt(c.area_px) +
+        ' px² · 采样 ' + c.n_samples + ' · 谐波 ' + c.n_harmonics + '</span></div>' +
+        '<table><thead><tr><th>谐波 k</th><th>幅度 |c|</th><th>相位 φ</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table>';
+      coeffs.appendChild(card);
+    });
+
+    // 平滑滚动到结果
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+})();
+</script>
+</body>
+</html>
