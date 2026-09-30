@@ -156,10 +156,27 @@ PYTHONPATH=$HOME/.pywheels/pillow python3 tools/ftrace_color.py colorize <coeffs
 
 ## 构建
 
+**推荐：交给 GitHub Actions 编译**（本机不跑重型 cargo，省电省资源）。
+推送 `main` 或打 `v*` tag 后，CI 自动构建**双架构**并上传产物：
+
+| 架构 | Runner | 产物 | 用途 |
+|---|---|---|---|
+| x86_64 | `ubuntu-24.04` | `ftrace-linux-x86_64` / `ftrace-web-linux-x86_64` | 常规服务器/桌面 |
+| aarch64 | `ubuntu-24.04-arm` | `ftrace-linux-aarch64` / `ftrace-web-linux-aarch64` | 本机移动设备 / ARM 服务器 |
+
+- 触发：push main / PR / `workflow_dispatch` 手动；打 `v*` tag 自动发布到 GitHub Release。
+- 取产物：仓库 **Actions** 页 → 对应 run → Artifacts；或 Release 页（tag 触发时）。
+- 工作流：`.github/workflows/build.yml`（含 `Swatinem/rust-cache` 缓存加速）。
+
+本地编译（可选，需要时再跑，注意 `-j` 限核）：
+
 ```bash
-cargo build --release        # 产物: target/release/ftrace
+cargo build --release -j4    # 产物: target/release/ftrace 与 ftrace-web
 cargo run --release -- --help
 ```
+
+> 本地编译会产生 ~1.6GB 的 `target/` 缓存，可用 `cargo clean` 清理；
+> `test_images/`（~162MB 本地素材）与 `bin/`（本地二进制备份）均不入库。
 
 ## 测试
 
